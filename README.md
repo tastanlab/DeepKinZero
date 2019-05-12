@@ -40,7 +40,7 @@ python3 RunWithBestMethod.py --TestData path_to_your_data
 
 ## Authors
 
-* **Iman Deznabi** - University of Massachussets Amherst
+* **Iman Deznabi** - University of Massachusetts Amherst
 * **Busra Arabaci** - Bilkent University
 * **Mehmet Koyuturk** - Case Western Reserve University
 * **Oznur Tastan** - Sabanci University
