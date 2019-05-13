@@ -27,7 +27,7 @@ git clone https://github.com/tastanlab/DeepKinZero
 ```
 
 ### Run the trained model on your data
-First run DownloadCheckpoint.py file to download the weights of the best model from Google Drive:
+First run DownloadCheckpoint.py file to download the weights of the best model from Google Drive (you need tqdm, zipfile, requests libraries installed):
 ```
 python3 DownloadCheckpoint.py
 ```
