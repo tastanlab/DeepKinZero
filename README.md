@@ -13,10 +13,10 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 ```
-* Python 3.6+
-* Tensorflow 1.9+
-* scikit-learn
-* numpy
+Python 3.6+
+Tensorflow 1.9+
+scikit-learn
+numpy
 ```
 
 ### Installing
