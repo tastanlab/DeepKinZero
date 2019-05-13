@@ -257,14 +257,14 @@ def Run(Model = "ZSL",
     
     Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
     Train_Evaluations = {"Accuracy":Train_accuracy, "Loss":Train_Loss}
-    UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase, verbose=True)
+    UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase, WriteZSLWeights=False)
     UniProtIDs, probabilities = ensemble(UniProtIDs, probabilities, Candidate_UniProtIDs)
     
     Test_Evaluations = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestDS.KinaseUniProtIDs, Test_TrueClassIDX)
     with open(os.path.join(FolderName,'Test_probabilities.txt'), 'w+') as f:
         np.savetxt(f, probabilities)
     
-    ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, verbose=False)
+    ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, WriteZSLWeights=False)
     ValUniProtIDs, Valprobabilities = ensemble(ValUniProtIDs, Valprobabilities, ValCandidate_UniProtIDs)
     
     Val_Evaluations = GetAccuracyMultiLabel(ValUniProtIDs, Valprobabilities, ValDS.KinaseUniProtIDs, Val_TrueClassIDX)

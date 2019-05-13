@@ -16,13 +16,15 @@ if __name__ == '__main__':
     parser.add_argument('--BestModelCheckpoint', help='The path for the checkpoint folder of the best model', type=str, default='BestModelCheckpoint')
     # Get data paths
     parser.add_argument('--TrainData', help='The path for train data', type=str, default='Data/Train_Phosphosite_new.txt')
-    #parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/Test_Phosphosite_MultiLabel.txt')
     # Test data Paths
-    parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/PhosphoELM/test_pelm/Test_PhoELM_MultiLabel.txt')
-    parser.add_argument('--TestKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/PhosphoELM/test_pelm/Candidate_Kinases_pELM.txt')
+    #parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/PhosphoELM/test_pelm/Test_PhoELM_MultiLabel.txt')
+    #parser.add_argument('--TestKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/PhosphoELM/test_pelm/Candidate_Kinases_pELM.txt')
+    parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/Test_Phosphosite_MultiLabel.txt')
+    parser.add_argument('--TestKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Candidate_Kinases_new.txt')
     # Val data Paths
     parser.add_argument('--ValData', help='The path for validation data', type=str, default='Data/Val_Phosphosite_MultiLabel.txt')
     parser.add_argument('--ValKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Val_Candidate_Kinases.txt')
+    
             
     args=parser.parse_args()
     ModelParams = {"rnn_unit_type": "LNlstm", "num_layers": 2, "num_hidden_units": 512, "dropoutval": 0.5, "learningrate": 0.001, "useAtt": True, "useEmbeddingLayer": False, "useEmbeddingLayer": False, "num_of_Convs": [], "UseBatchNormalization1": True, "UseBatchNormalization2": True, "EMBEDDING_DIM": 500, "ATTENTION_SIZE": 20, "IncreaseEmbSize": 0, "Bidirectional":True, "Dropout1": True, "Dropout2": True, "Dropout3": False, "regs": 0.001, "batch_size": 64, "ClippingGradients": 9.0, "activation1": None, "LRDecay":True, "seed":100, "NumofModels": 10} #a dictionary indicating the parameters provided for the model
