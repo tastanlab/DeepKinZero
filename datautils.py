@@ -279,6 +279,25 @@ class dataset:
             return self.propertyVectors
         else:
             return self.seqBinaryVectors.reshape([-1, 15, 21])
+    @staticmethod
+    def Get_SeqSize(AminoAcidProperties, ProtVec):
+        """
+        According to given flags AminoAcidProperties and ProtVec, calculates the size of output
+        The output is a tuple of (Seq_size, EmbeddingSize)
+        
+        Args:
+            AminoAcidProperties (binary): return sequences as represented by one-hot binary vectors for each amino acid
+            ProtVec (binary): return sequences as represented by protvec vectors
+        
+        Return:
+            a tuple of sequence (SequenceSize, EmbeddingSize)
+        """
+        if ProtVec:
+            return (13, 100)
+        elif AminoAcidProperties:
+            return (15, 16)
+        else:
+            return (15, 21)
 class kinase:
     """
     Class for holding kinase information
@@ -331,6 +350,7 @@ class KinaseEmbedding:
     UniProtID_to_Kinase = {} # a dictionary of uniprotID to kinase
     AllKinaseEmbeddings = [] # A list of all kinases embedded vectors
     KE_to_Kinase = {} # a dictionary of kinase Embedding vector to kinase class
+    Embedding_size = 0 # The size of Kinase embeddings
     def __init__(self, Family = True, Group = True, Pathway = True, Kin2Vec = True, InterProDomains = True, Enzymes = True, SubCellLoc = True, GO_C_vec = True, GO_F_vec = True, GO_P_vec = True):
         """
         Get the paramethers for class embedding and initilize some variables to use later then run readKinaseEmbedding and ReadKinases methods to read all the kinases and create the embeddings for them
@@ -350,7 +370,8 @@ class KinaseEmbedding:
         self.Family= Family; self.Group=Group; self.Pathway= Pathway; self.Kin2Vec = Kin2Vec; self.InterProDomains= InterProDomains; self.Enzymes= Enzymes; self.GO_C_vec= GO_C_vec; self.GO_F_vec= GO_F_vec; self.GO_P_vec= GO_P_vec
         self.readKinaseEmbedding()
         self.ReadKinases()
-    
+        self.Embedding_size = len(self.AllKinaseEmbeddings[0])
+        
     def ReadKinases(self):
         """
         This method reads all kinases from the AllKinasePath and creates the necessary dictionaries and arrays

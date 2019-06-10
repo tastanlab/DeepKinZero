@@ -568,7 +568,7 @@ class EndToEndModel:
                     loss_train += c / num_batches
                 duration_train = time.time()-start_time_train
                 if ValDE is not None:
-                    UniProtIDs, probabilities = self.predict(ValDE, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, self.Models[i], ind=i, WriteZSLWeights=False)
+                    UniProtIDs, probabilities = self.predict(ValDE, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, self.Models[i], ind=i, verbose=False)
                     UniProtIDs = UniProtIDs[0]
                     probabilities = probabilities[0]
                     ValUniProtIDs.append(UniProtIDs)
@@ -587,7 +587,7 @@ class EndToEndModel:
                     Val_summary.value.add(tag="Loss", simple_value=Val_Evaluation["Loss"])
                     self.val_writer['Graph_' + str(i)].add_summary(Val_summary, epoch)
                 if TestDE is not None:
-                    UniProtIDs, probabilities = self.predict(TestDE, TestCandidatekinaseEmbeddings, CandidateKE_to_Kinase, self.Models[i], ind=i, WriteZSLWeights=False)
+                    UniProtIDs, probabilities = self.predict(TestDE, TestCandidatekinaseEmbeddings, CandidateKE_to_Kinase, self.Models[i], ind=i, verbose=False)
                     UniProtIDs = UniProtIDs[0]
                     probabilities = probabilities[0]
                     TestUniProtIDs.append(UniProtIDs)
@@ -692,13 +692,13 @@ class EndToEndModel:
         Allresults.close()
         return Bestaccuracy_Train, Best_loss
     
-    def predict(self,  DataEmbedding, TestCandidateKinases, CandidateKE_to_Kinase, Model = None, ind=None, WriteZSLWeights= False):
+    def predict(self,  DataEmbedding, TestCandidateKinases, CandidateKE_to_Kinase, Model = None, ind=None, verbose= True):
         """
         The method to predict the classes of given DataEmbeddings
         Args:
             DataEmbedding: The sequence embedding of the input kinases
             TestCandidateKinases: The list of candidate kinases
-            WriteZSLWeights: Should the program write the Weight matrix in a file
+            verbose: Should the program write the Weight matrix in a file
         """
         # Add 1 to the end of Data embeddings and candidate kinase embeddings
         #DataEmbedding = np.c_[ DataEmbedding, np.ones(len(DataEmbedding)) ]
@@ -724,7 +724,7 @@ class EndToEndModel:
                           self.is_training[index]: False}
             
             logits, W, OC = self.sess[index].run([model["logits"], model["W"], model["outclassidx"]], feed_dict=input_feed)
-            if WriteZSLWeights:
+            if verbose:
                 print("Writing weight matrix W in", os.path.join('EndToEndZSLWeights','ZSL_Weights' + str(self.seed) + '.txt'))
                 np.savetxt(os.path.join('ZSLWeights','ZSL_Weights' + str(self.seed[idx]) + '.txt'), W)
            

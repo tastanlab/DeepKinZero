@@ -169,7 +169,7 @@ def Run(Model = "ZSL",
         TrainingEpochs = 70, LoadModel = False,
         CustomLabel="", seed=None,
         TrainData = '', 
-        TestData = '', TestKinaseCandidates= '', 
+        TestData = '', TestKinaseCandidates= '', TestisLabeled=False,
         ValData='', ValKinaseCandidates= '',
         ParentLogDir='Logs', EmbeddingOrParams=False, CheckpointPath=None):
     """ This is the main function which is responsible with running the whole code given the parameters
@@ -206,20 +206,22 @@ def Run(Model = "ZSL",
         os.makedirs(DEFolder)
     # Create Kinase Embedding class to get the list of available kinases and their embeddings
     KE = KinaseEmbedding(Family = Family, Group = Group, Pathway = Pathways, Kin2Vec=Kin2Vec, Enzymes = Enzymes)
-    # Create the training dataset
-    TrainDS = dataset()
-    TrainDS.getdata(TrainData, KE, islabeled=True)
-    TrainSeqEmbedded = TrainDS.Get_Embedded_Seqs(AminoAcidProperties, ProtVec) # Get the sequence embeddings
-    #Normalize Training data
-    if NormalizeDE:
-        TrainSeqEmbeddedreshaped = TrainSeqEmbedded.reshape(TrainSeqEmbedded.shape[0], TrainSeqEmbedded.shape[1] * TrainSeqEmbedded.shape[2])
-        SeqEmbedScaler = preprocessing.StandardScaler().fit(TrainSeqEmbeddedreshaped)
-        TrainSeqEmbeddedreshaped = SeqEmbedScaler.transform(TrainSeqEmbeddedreshaped)
-        TrainSeqEmbedded = TrainSeqEmbeddedreshaped.reshape(TrainSeqEmbedded.shape[0], TrainSeqEmbedded.shape[1], TrainSeqEmbedded.shape[2])
+    if TrainData != '':
+        # Create the training dataset
+        TrainDS = dataset()
+        TrainDS.getdata(TrainData, KE, islabeled=True)
+        TrainSeqEmbedded = TrainDS.Get_Embedded_Seqs(AminoAcidProperties, ProtVec) # Get the sequence embeddings
+        #Normalize Training data
+        if NormalizeDE:
+            TrainSeqEmbeddedreshaped = TrainSeqEmbedded.reshape(TrainSeqEmbedded.shape[0], TrainSeqEmbedded.shape[1] * TrainSeqEmbedded.shape[2])
+            SeqEmbedScaler = preprocessing.StandardScaler().fit(TrainSeqEmbeddedreshaped)
+            TrainSeqEmbeddedreshaped = SeqEmbedScaler.transform(TrainSeqEmbeddedreshaped)
+            TrainSeqEmbedded = TrainSeqEmbeddedreshaped.reshape(TrainSeqEmbedded.shape[0], TrainSeqEmbedded.shape[1], TrainSeqEmbedded.shape[2])
+        TrueClassIDX = FindTrueClassIndices(TrainDS.KinaseEmbeddings, TrainDS.UniqueKinaseEmbeddings)
     if TestData != '':
         TestDS = dataset()
         #TestDS.getdata(TestData, KE, islabeled=True, MultiLabel=True)
-        TestDS.getdata(TestData, KE, islabeled=True, MultiLabel=True)
+        TestDS.getdata(TestData, KE, islabeled=TestisLabeled, MultiLabel=True)
         TestSeqEmbedded = TestDS.Get_Embedded_Seqs(AminoAcidProperties, ProtVec)
         if NormalizeDE:
             TestSeqEmbeddedreshaped = TestSeqEmbedded.reshape(TestSeqEmbedded.shape[0], TestSeqEmbedded.shape[1] * TestSeqEmbedded.shape[2])
@@ -233,16 +235,17 @@ def Run(Model = "ZSL",
             ValSeqEmbeddedreshaped = ValSeqEmbedded.reshape(ValSeqEmbedded.shape[0], ValSeqEmbedded.shape[1] * ValSeqEmbedded.shape[2])
             ValSeqEmbeddedreshaped = SeqEmbedScaler.transform(ValSeqEmbeddedreshaped)
             ValSeqEmbedded = ValSeqEmbeddedreshaped.reshape(ValSeqEmbedded.shape[0], ValSeqEmbedded.shape[1], ValSeqEmbedded.shape[2])
-    Candidatekinases, CandidatekinaseEmbeddings, Candidateindices, CandidateKE_to_Kinase, Candidate_UniProtIDs = KE.readKinases(TestKinaseCandidates)
-    ValCandidatekinases, ValCandidatekinaseEmbeddings, ValCandidateindices, ValCandidateKE_to_Kinase, ValCandidate_UniProtIDs = KE.readKinases(ValKinaseCandidates)
+    if TestKinaseCandidates != '':
+        Candidatekinases, CandidatekinaseEmbeddings, Candidateindices, CandidateKE_to_Kinase, Candidate_UniProtIDs = KE.readKinases(TestKinaseCandidates)
+        if TestisLabeled:
+            Test_TrueClassIDX = FindTrueClassIndices(TestDS.KinaseEmbeddings, CandidatekinaseEmbeddings, True)
+    if ValKinaseCandidates != '':
+        ValCandidatekinases, ValCandidatekinaseEmbeddings, ValCandidateindices, ValCandidateKE_to_Kinase, ValCandidate_UniProtIDs = KE.readKinases(ValKinaseCandidates)
+        Val_TrueClassIDX = FindTrueClassIndices(ValDS.KinaseEmbeddings, ValCandidatekinaseEmbeddings, True)
     
-    TrueClassIDX = FindTrueClassIndices(TrainDS.KinaseEmbeddings, TrainDS.UniqueKinaseEmbeddings)
-    Test_TrueClassIDX = FindTrueClassIndices(TestDS.KinaseEmbeddings, CandidatekinaseEmbeddings, True)
-    Val_TrueClassIDX = FindTrueClassIndices(ValDS.KinaseEmbeddings, ValCandidatekinaseEmbeddings, True)
-        
-        
+    Phosphosite_Seq_Size = dataset.Get_SeqSize(AminoAcidProperties, ProtVec)
     # Create Data Embedding model and train it over the training data
-    EndToEndmodel = EndToEndModel(vocabnum = TrainSeqEmbedded.shape[-1], seqlens = TrainSeqEmbedded.shape[-2], Params=ModelParams, LogDir = FolderName, ckpt_dir = DEFolder, WriteEmbeddingVis=False, ClassEmbeddingsize=TrainDS.KinaseEmbeddings.shape[-1], seed=seed)
+    EndToEndmodel = EndToEndModel(vocabnum = Phosphosite_Seq_Size[1], seqlens = Phosphosite_Seq_Size[0], Params=ModelParams, LogDir = FolderName, ckpt_dir = DEFolder, WriteEmbeddingVis=False, ClassEmbeddingsize=KE.Embedding_size, seed=seed)
     if LoadModel:
         Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
     else:
@@ -255,16 +258,19 @@ def Run(Model = "ZSL",
         #        print(str(EndToEndmodel._epochs_completed) + ' , ' + str(sys.exc_info()), file=f)
         #EndToEndmodel.savemodel()
     
-    Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
+    #Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
     Train_Evaluations = {"Accuracy":Train_accuracy, "Loss":Train_Loss}
-    UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase, WriteZSLWeights=False)
+    UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase, verbose=True)
     UniProtIDs, probabilities = ensemble(UniProtIDs, probabilities, Candidate_UniProtIDs)
     
-    Test_Evaluations = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestDS.KinaseUniProtIDs, Test_TrueClassIDX)
+    if TestisLabeled:
+        Test_Evaluations = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestDS.KinaseUniProtIDs, Test_TrueClassIDX)
+    else:
+        Test_Evaluations = {}
     with open(os.path.join(FolderName,'Test_probabilities.txt'), 'w+') as f:
         np.savetxt(f, probabilities)
     
-    ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, WriteZSLWeights=False)
+    ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, verbose=False)
     ValUniProtIDs, Valprobabilities = ensemble(ValUniProtIDs, Valprobabilities, ValCandidate_UniProtIDs)
     
     Val_Evaluations = GetAccuracyMultiLabel(ValUniProtIDs, Valprobabilities, ValDS.KinaseUniProtIDs, Val_TrueClassIDX)
@@ -273,11 +279,19 @@ def Run(Model = "ZSL",
         np.savetxt(f, Valprobabilities)
         
     #accuracy = accuracy_score(UniProtIDs, TestDS.KinaseUniProtIDs)
-    print("Number of Train data: {} Number of Test data: {} Number of Val data: {}".format(len(TrainDS.Sub_IDs), len(TestDS.Sub_IDs), len(ValDS.Sub_IDs)))
-    print("TrainLoss = ", Train_Loss, "ValLoss = ", Val_Evaluations["Loss"], "TestLoss = ", Test_Evaluations["Loss"])
-    print("TrainAccuracy = ", Train_Evaluations["Accuracy"], "Valaccuracy = ", Val_Evaluations["Accuracy"], "TestAccuracy = ", Test_Evaluations["Accuracy"])
+    #print("Number of Train data: {} Number of Test data: {} Number of Val data: {}".format(len(TrainDS.Sub_IDs), len(TestDS.Sub_IDs), len(ValDS.Sub_IDs)))
+    if TestisLabeled:
+        print("TrainLoss = ", Train_Loss, "ValLoss = ", Val_Evaluations["Loss"], "TestLoss = ", Test_Evaluations["Loss"])
+        print("TrainAccuracy = ", Train_Evaluations["Accuracy"], "Valaccuracy = ", Val_Evaluations["Accuracy"], "TestAccuracy = ", Test_Evaluations["Accuracy"])
+    else:
+        print("TrainLoss = ", Train_Loss, "ValLoss = ", Val_Evaluations["Loss"], "TestLoss = ")
+        print("TrainAccuracy = ", Train_Evaluations["Accuracy"], "Valaccuracy = ", Val_Evaluations["Accuracy"])
     
-    return Train_Evaluations, Val_Evaluations, Test_Evaluations
+    with open(os.path.join(FolderName,'Predictions.txt'), 'w') as predictions:
+        for Probs, subID, Seq in zip(probabilities, TestDS.Sub_IDs, TestDS.Sequences):
+            print(subID + ',' + ''.join(Seq) + '\t' + ', '.join([str(x) + '(' + str(y) +')' for y, x in sorted(zip(Probs,Candidate_UniProtIDs), key=lambda pair: pair[0], reverse=True)]), file=predictions)
+    
+    return Train_Evaluations, Val_Evaluations, Test_Evaluations, UniProtIDs
     
 if __name__ == '__main__':
     parser=argparse.ArgumentParser()
