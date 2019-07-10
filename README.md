@@ -1,6 +1,6 @@
 # DeepKinZero
 This repository contains the code and hyperparameters for the paper:
-
+https://www.biorxiv.org/content/biorxiv/early/2019/06/16/670638.full.pdf
 
 Please cite this paper if you use the code in this repository as part of a published research project.
 
