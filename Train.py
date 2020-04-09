@@ -20,11 +20,10 @@ if __name__ == '__main__':
     parser.add_argument('--ModelEpochs', help='Number of Epochs for training the main model', default=50, type=int)
     
     # Get data paths
-    parser.add_argument('--TrainData', help='The path for train data', type=str, default='Data/Train_Phosphosite_new.txt')
-    parser.add_argument('--TestKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Candidate_Kinases_new.txt')
+    parser.add_argument('--TrainData', help='The path for train data', type=str, default='Data/Train_Phosphosite.txt')
     # Val data Paths
-    parser.add_argument('--ValData', help='The path for validation data', type=str, default='Data/Val_Phosphosite_MultiLabel.txt')
-    parser.add_argument('--ValKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Val_Candidate_Kinases.txt')
+    parser.add_argument('--ValData', help='The path for validation data, leave empty for not running on validation data', type=str, default='Data/Val_Phosphosite_MultiLabel.txt')
+    parser.add_argument('--ValKinaseCandidates', help='The path to the file which contains the list of validation candidates', type=str, default='Data/Val_Candidate_Kinases.txt')
         
     parser.add_argument('--NumofModels', help='Number of models to ensemble', type=int, default=10)
     
