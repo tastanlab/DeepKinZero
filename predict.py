@@ -18,7 +18,7 @@ if __name__ == '__main__':
                         Check Data\\PhosPhoELM\\PhoELMdata.txt for an example', type=str, required=True)
     parser.add_argument('--candidates', help='The path to the file which contains the list of kinase candidates, \n \
                         these are your potential kinases which can phosphorylate your phosphosites', type=str, default='Data/AllCandidates.txt')
-    parser.add_argument('--output', help='Path to where the predicted kinases will be saved', type=str, default='Output/predictions.txt')
+    parser.add_argument('--output', help='Path to where the predicted kinases will be saved', type=str, default='Output/predictions.csv')
     parser.add_argument('--NumOfTop', help='Number of top kinases (highest predicted probability) to include in results', type=int, default=10)
     
     args=parser.parse_args()
