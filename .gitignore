@@ -104,5 +104,6 @@ venv.bak/
 .mypy_cache/
 
 BestModelCheckpoint/
-BestModelCheckpoint.zip
-RunWithBestModel/
+Output/
+Logs/
+ModelCheckpoints/

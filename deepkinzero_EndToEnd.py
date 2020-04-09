@@ -18,13 +18,12 @@ import warnings
 warnings.warn = warn
 warnings.filterwarnings("ignore")
 
-import os, argparse, time
-import datetime
-import sys
+import pickle as pkl
 
 import numpy as np
 import tensorflow as tf
 
+import os
 #Data Utilities
 from datautils import (dataset, KinaseEmbedding)
 
@@ -48,6 +47,24 @@ from sklearn import preprocessing
 
 from sklearn.metrics import accuracy_score
 
+def Write_predictions(FilePath, probabilities, Sub_IDs, Sequences, Residues, Candidatekinases, Candidate_UniProtIDs, top_n, sub_ID_has_original_rows=False):
+    with open(FilePath, 'w') as predictions:
+        print('Row id in the Original File, Phosphosite Residue, Substrate protein, Phosphosite Sequence' + ',' + ','.join(['Predicted Kinase UniProt ID', 'Predicted Kinase Name', 'Predicted Probability'] * top_n), file=predictions)
+        original_row = 0
+        for Probs, subID, Seq, Res in zip(probabilities, Sub_IDs, Sequences, Residues):
+            sorted_predictions = [[x,y] for y, x in sorted(zip(Probs,Candidatekinases), key=lambda pair: pair[0], reverse=True)]
+            if sub_ID_has_original_rows:
+                sub_ID_splitted = subID.split('_')
+                subID = sub_ID_splitted[1]
+                original_row = sub_ID_splitted[0]
+            else:
+                original_row += 1
+            row = str(original_row) + ',' + Res + ',' + subID + ',' + ''.join(Seq) + ','
+            for i in range(top_n):
+                prob = sorted_predictions[i][1]
+                kinase = sorted_predictions[i][0]
+                row += kinase.UniprotID + ',' + kinase.Protein_Name + ',' + str(prob) + ','
+            print(row, file=predictions)
 def FindTrueClassIndices(ClassEmbeddings, CandidateKinases, Multilabel = False):
     """
     Find the indices of the true classes in the candidate class embeddings
@@ -171,7 +188,8 @@ def Run(Model = "ZSL",
         TrainData = '', 
         TestData = '', TestKinaseCandidates= '', TestisLabeled=False,
         ValData='', ValKinaseCandidates= '',
-        ParentLogDir='Logs', EmbeddingOrParams=False, CheckpointPath=None):
+        ParentLogDir='Logs', EmbeddingOrParams=False, OutPath = 'Output/predictions.txt', Top_n = 10,
+        CheckpointPath=None):
     """ This is the main function which is responsible with running the whole code given the parameters
     Args:
         AminoAcidProperties (bool): Use other properties of Amino Acids
@@ -185,6 +203,9 @@ def Run(Model = "ZSL",
         Pathways (bool): Use KEGG pathways data in Class Embeddings
         Kin2Vec (bool): Use Vectors generated from protein2vec for Kinase Sequences in Class Embeddings
         MainModel (str): What is the main model for classification (it can be SZSL, SVM, LogisticRegression, RNN, BiRNN)
+        OutPath (str): Path to the output file
+        Top_n (int): Number of top kinases (predicted with highest probabilities) to report
+        CheckpointPath (str): path to model checkpoint
     """
     # Create a folder name based on paramethers
     FolderName, DEFolder = createFolderName(AminoAcidProperties, ProtVec, Family, Group, Pathways, Kin2Vec, Enzymes, ModelParams, Model, EmbeddingOrParams)
@@ -218,6 +239,9 @@ def Run(Model = "ZSL",
             TrainSeqEmbeddedreshaped = SeqEmbedScaler.transform(TrainSeqEmbeddedreshaped)
             TrainSeqEmbedded = TrainSeqEmbeddedreshaped.reshape(TrainSeqEmbedded.shape[0], TrainSeqEmbedded.shape[1], TrainSeqEmbedded.shape[2])
         TrueClassIDX = FindTrueClassIndices(TrainDS.KinaseEmbeddings, TrainDS.UniqueKinaseEmbeddings)
+    else:
+        with open('Data/SeqScaler.pkl', 'rb') as SeqScalerFile:
+            SeqEmbedScaler = pkl.load(SeqScalerFile)
     if TestData != '':
         TestDS = dataset()
         #TestDS.getdata(TestData, KE, islabeled=True, MultiLabel=True)
@@ -249,115 +273,31 @@ def Run(Model = "ZSL",
     if LoadModel:
         Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
     else:
-        #try:
         Train_accuracy, Train_Loss= EndToEndmodel.train(TrainSeqEmbedded, TrainDS.KinaseEmbeddings, TrainCandidateKinases=TrainDS.UniqueKinaseEmbeddings, epochcount=TrainingEpochs, 
-                            ValDE= ValSeqEmbedded, ValCandidatekinaseEmbeddings=ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase=ValCandidateKE_to_Kinase, ValKinaseUniProtIDs=ValDS.KinaseUniProtIDs, ValKinaseEmbeddings=ValDS.KinaseEmbeddings, ValCandidateUniProtIDs=ValCandidate_UniProtIDs,
-                            TestDE=TestSeqEmbedded, TestCandidatekinaseEmbeddings=CandidatekinaseEmbeddings, CandidateKE_to_Kinase=CandidateKE_to_Kinase, TestCandidateUniProtIDs=Candidate_UniProtIDs, TestKinaseUniProtIDs=TestDS.KinaseUniProtIDs, TestKinaseEmbeddings=TestDS.KinaseEmbeddings, TrueClassIDX= TrueClassIDX, Test_TrueClassIDX= Test_TrueClassIDX, Val_TrueClassIDX = Val_TrueClassIDX)
-    #except:
-        #    with open(os.path.join(FolderName,'Error.txt'), 'w+') as f:
-        #        print(str(EndToEndmodel._epochs_completed) + ' , ' + str(sys.exc_info()), file=f)
-        #EndToEndmodel.savemodel()
+                            ValDE= ValSeqEmbedded, ValCandidatekinaseEmbeddings=ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase=ValCandidateKE_to_Kinase, ValKinaseUniProtIDs=ValDS.KinaseUniProtIDs, ValKinaseEmbeddings=ValDS.KinaseEmbeddings, ValCandidateUniProtIDs=ValCandidate_UniProtIDs, TrueClassIDX= TrueClassIDX, Val_TrueClassIDX = Val_TrueClassIDX)
     
-    #Train_accuracy, Train_Loss, epochs_completed = EndToEndmodel.loadmodel()
-    Train_Evaluations = {"Accuracy":Train_accuracy, "Loss":Train_Loss}
-    UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase, verbose=True)
-    UniProtIDs, probabilities = ensemble(UniProtIDs, probabilities, Candidate_UniProtIDs)
+    if TrainData != '':
+        Train_Evaluations = {"Accuracy":Train_accuracy, "Loss":Train_Loss}
     
-    if TestisLabeled:
-        Test_Evaluations = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestDS.KinaseUniProtIDs, Test_TrueClassIDX)
-    else:
-        Test_Evaluations = {}
-    with open(os.path.join(FolderName,'Test_probabilities.txt'), 'w+') as f:
-        np.savetxt(f, probabilities)
+        if TestisLabeled:
+            Test_Evaluations = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestDS.KinaseUniProtIDs, Test_TrueClassIDX)
+        else:
+            Test_Evaluations = {}
     
-    ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, verbose=False)
-    ValUniProtIDs, Valprobabilities = ensemble(ValUniProtIDs, Valprobabilities, ValCandidate_UniProtIDs)
-    
-    Val_Evaluations = GetAccuracyMultiLabel(ValUniProtIDs, Valprobabilities, ValDS.KinaseUniProtIDs, Val_TrueClassIDX)
-    
-    with open(os.path.join(FolderName,'Val_probabilities.txt'), 'w+') as f:
-        np.savetxt(f, Valprobabilities)
+    if ValData != '':
+        ValUniProtIDs, Valprobabilities = EndToEndmodel.predict(ValSeqEmbedded, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase)
+        ValUniProtIDs, Valprobabilities = ensemble(ValUniProtIDs, Valprobabilities, ValCandidate_UniProtIDs)
         
-    #accuracy = accuracy_score(UniProtIDs, TestDS.KinaseUniProtIDs)
-    #print("Number of Train data: {} Number of Test data: {} Number of Val data: {}".format(len(TrainDS.Sub_IDs), len(TestDS.Sub_IDs), len(ValDS.Sub_IDs)))
+        Val_Evaluations = GetAccuracyMultiLabel(ValUniProtIDs, Valprobabilities, ValDS.KinaseUniProtIDs, Val_TrueClassIDX)
+        
     if TestisLabeled:
         print("TrainLoss = ", Train_Loss, "ValLoss = ", Val_Evaluations["Loss"], "TestLoss = ", Test_Evaluations["Loss"])
         print("TrainAccuracy = ", Train_Evaluations["Accuracy"], "Valaccuracy = ", Val_Evaluations["Accuracy"], "TestAccuracy = ", Test_Evaluations["Accuracy"])
-    else:
-        print("TrainLoss = ", Train_Loss, "ValLoss = ", Val_Evaluations["Loss"], "TestLoss = ")
-        print("TrainAccuracy = ", Train_Evaluations["Accuracy"], "Valaccuracy = ", Val_Evaluations["Accuracy"])
     
-    with open(os.path.join(FolderName,'Predictions.txt'), 'w') as predictions:
-        for Probs, subID, Seq in zip(probabilities, TestDS.Sub_IDs, TestDS.Sequences):
-            print(subID + ',' + ''.join(Seq) + '\t' + ', '.join([str(x) + '(' + str(y) +')' for y, x in sorted(zip(Probs,Candidate_UniProtIDs), key=lambda pair: pair[0], reverse=True)]), file=predictions)
-    
-    return Train_Evaluations, Val_Evaluations, Test_Evaluations, UniProtIDs
-    
-if __name__ == '__main__':
-    parser=argparse.ArgumentParser()
-    parser.add_argument('--BestParamethers', help='Use the best paramethers for the models', action='store_true')
-    # The Zero-Shot learning model
-    parser.add_argument('--Model', help='The default model for classification (ZSL, RNN, BiRNN)', default="SZL", type=str)
-    parser.add_argument('--ModelEpochs', help='Number of Epochs for training the main model (ZSL, Logistic Regression or SVM)', default=100, type=int)
-    # Data Embedding types
-    parser.add_argument('--AminoAcidProperties', action='store_true', help='Use other properties for Amino Acids while embedding Options are True or False')
-    parser.add_argument('--UseProtVec', action='store_true', help='Use ProtVec to convert the dataembedding sequence to a vector')
-    # Data Embedding model paramethers
-    parser.add_argument('--Embedding', help='Select the Embedding model the options are BiRNN and RNN do not write this argument for not using an embedding model', type=str, default="Binary")
-    parser.add_argument('--RNNNodeType', help='The type of node to use in RNN model (CUDNNLSTM, LNlstm, lstm, GRU, None)', default="LNlstm", type=str)
-    parser.add_argument('--EmbeddingDIM', help='The size of embedding layer at beginning', default=100, type=int)
-    parser.add_argument('--DENumofLayers', help='The number of hidden layers in DataEmbedding model', default=1, type=int)
-    parser.add_argument('--DEhiddenUnits', help='The number of hidden units in DataEmbedding model', default=100, type=int)
-    parser.add_argument('--IncreaseEmbSize', default=0, type=int, help='Use a dense layer to increase the size of the embedding layer to given number' )
-    parser.add_argument('--NumOfConvLayers', help='Number of filters for each Conv Layers to use in BiRNN before BiRNN model leave empty to not use Conv layers', nargs='*', type=int, default=[])
-    parser.add_argument('--DoNotUseEmbeddingLayer', action='store_false', help='Do Not use Embedding Layer' )
-    parser.add_argument('--UseAttention', action='store_true', help='Use Attention Mechanism in RNN and BiRNN models')
-    parser.add_argument('--AttSize', help='Size of the attention layer',  default=5, type=int)
-    parser.add_argument('--LoadDEModel', action='store_true', help='If included the data embedding model will be loaded from the appropriate folder and will not be trained' )
-    # Kinase Embedding options
-    parser.add_argument('--UseFamily', action='store_true', help='Use Kinase Family in Class Embedding')
-    parser.add_argument('--UseGroup', action='store_true', help='Use Kinase Group in Class Embedding')
-    parser.add_argument('--UsePathway', action='store_true', help='Use KEGG Pathways as class embedding')
-    parser.add_argument('--UseEnzymes', action='store_true', help='Use Enzymes vectors as class embedding')
-    parser.add_argument('--UseKin2Vec', action='store_true', help='Use Vectors generated from protein2vec for Kinase Sequences as class embedding')
-    # Get data paths
-    parser.add_argument('--TrainData', help='The path for train data', type=str, default='Data/Train_Phosphosite_new.txt')
-    #parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/Test_Phosphosite_MultiLabel.txt')
-    # Test data Paths
-    parser.add_argument('--TestData', help='The path for test data', type=str, default='Data/Test_Phosphosite_MultiLabel.txt')
-    parser.add_argument('--TestKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Candidate_Kinases_new.txt')
-    # Val data Paths
-    parser.add_argument('--ValData', help='The path for validation data', type=str, default='Data/Val_Phosphosite_MultiLabel.txt')
-    parser.add_argument('--ValKinaseCandidates', help='The path to the file which contains the list of test candidates', type=str, default='Data/Val_Candidate_Kinases.txt')
-    
-    parser.add_argument('--CustomLabelForResult', help='Add a custom label to the name of the method in output result',  default="", type=str)
-    args=parser.parse_args()
-    print(args)
-    ModelParams = EndToEndModel.Params
-    #ModelParams["regs"] = 0
-    ModelParams["UseBatchNormalization1"] = True
-    if args.BestParamethers:
-        Run(Model = 'ZSL', TrainingEpochs = args.ModelEpochs,
-            AminoAcidProperties = False, ProtVec = True, NormalizeDE = False,
-            ModelParams= ModelParams, Family = True, Group = True, Pathways = False, Kin2Vec=True, Enzymes = True,
-            LoadDEModel = args.LoadDEModel, CustomLabel=args.CustomLabelForResult,
-            TrainData = args.TrainData, TestData = args.TestData, ValData=args.ValData, TestKinaseCandidates= args.TestKinaseCandidates, ValKinaseCandidates= args.ValKinaseCandidates)
-    else:
-        BiRNNfeatures = False
-        RNNfeatures = False
-        if args.Embedding == 'BiRNN':
-            BiRNNfeatures = True
-        elif args.Embedding == 'RNN':
-            RNNfeatures = True
-        elif args.Embedding == 'Binary':
-            BiRNNfeatures = False
-            RNNfeatures = False
-        else:
-            raise TypeError('Embedding should either be BiRNN or RNN or Binary (default)')
+    if TestData != '':
+        UniProtIDs, probabilities = EndToEndmodel.predict(TestSeqEmbedded, CandidatekinaseEmbeddings, CandidateKE_to_Kinase)
+        UniProtIDs, probabilities = ensemble(UniProtIDs, probabilities, Candidate_UniProtIDs)
+        Write_predictions(OutPath, probabilities, TestDS.Sub_IDs, TestDS.Sequences, TestDS.Residues, Candidatekinases, Candidate_UniProtIDs, top_n=Top_n, sub_ID_has_original_rows=False)
         
-        Run(Model = args.Model, ModelEpochs = args.ModelEpochs,
-            AminoAcidProperties = args.AminoAcidProperties, ProtVec = args.UseProtVec,
-            BiRNNfeatures = BiRNNfeatures, Family = args.UseFamily, Group = args.UseGroup, Pathways = args.UsePathway, Kin2Vec=args.UseKin2Vec, Enzymes = args.UseEnzymes,
-            UseEmbeddingLayer=args.DoNotUseEmbeddingLayer, ConvLayers = args.NumOfConvLayers, DataEmbeddingEpochs = args.DataEmbeddingEpochs, IncreaseEmbSize= args.IncreaseEmbSize, RNNNodeType= args.RNNNodeType, HiddenNodes = args.DEhiddenUnits, RNN_num_layers=args.DENumofLayers, EmbeddingDIM = args.EmbeddingDIM, BiRNNAttention= args.UseAttention, AttentionSize=args.AttSize,
-            LoadDEModel = args.LoadDEModel, CustomLabel=args.CustomLabelForResult, ZSLseed=args.ZSLSeed,
-            TrainData = args.TrainData, TestData = args.TestData, ValData=args.ValData, TestKinaseCandidates= args.TestKinaseCandidates)
+    if TrainData != '':
+        return Train_Evaluations, Val_Evaluations, ValUniProtIDs

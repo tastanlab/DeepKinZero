@@ -185,28 +185,14 @@ class EndToEndModel:
             else:
                 raise Exception("Choose a valid RNN unit type.")
             
-            #if self.rnn_unit_type == 'LNlstm':
             #Create a layer
-            #For some strange reason when activation=tf.nn.relu is set the results become undeterminstic
             if L == self.Params["num_layers"] - 1:
-                single_cell = rnn_cell_type(self.Params["num_hidden_units"], activation=LinearActivation)#, scope='RNN_Cell_'+ fworbw + '_' + str(L) + str(GraphID))
+                single_cell = rnn_cell_type(self.Params["num_hidden_units"], activation=LinearActivation)
             else:
                 if self.Params["activation1"] == "None":
-                    single_cell = rnn_cell_type(self.Params["num_hidden_units"], activation=LinearActivation)#, scope='RNN_Cell_'+ fworbw + '_' + str(L) + str(GraphID))
+                    single_cell = rnn_cell_type(self.Params["num_hidden_units"], activation=LinearActivation)
                 else:
-                    single_cell = rnn_cell_type(self.Params["num_hidden_units"])#, scope='RNN_Cell_'+ fworbw + '_' + str(L) + str(GraphID))
-            
-            # Dropout
-            #single_cell = tf.nn.rnn_cell.DropoutWrapper(single_cell, input_keep_prob = self.keep_prob_ph, output_keep_prob = self.keep_prob_ph, seed = self.seed)
-            
-            #if self.useResidualWrapper:
-            #    single_cell = tf.contrib.rnn.ResidualWrapper(single_cell)
-            
-        
-            # Each state as one cell
-            #stacked_cell = tf.nn.rnn_cell.MultiRNNCell(
-            #    [single_cell] * self.num_layers)
-            #stacked_cell = [single_cell] * self.num_layers
+                    single_cell = rnn_cell_type(self.Params["num_hidden_units"])
     
         return single_cell
     
@@ -349,40 +335,24 @@ class EndToEndModel:
                 with tf.name_scope('ZSL/Weights'):
                     # Define The W (model weights)
                     W = tf.Variable(tf.random_normal([DE.get_shape().as_list()[1], self.ClassEmbeddingsize + 1], mean=0.0, stddev=0.05, seed=self.seed[GraphID]), name="Weights_" + str(GraphID))
-                    #tf.summary.histogram('Weights', W)
-                    #tf.summary.tensor_summary('Weights', W)
                 with tf.name_scope('ZSL/Calculate_Logits_'+str(GraphID)):
                     Matmul = tf.matmul(DE,W)
                     # Caclulate F = DE * W * CE for all the CEs in unique class embeddings (all the kinases)
                     logits = tf.matmul(Matmul, tf.transpose(self.CKE[GraphID]))
                     # Calculating the maximum of each row to normalize logits so that softmax doesn't overflow
                     maxlogits = tf.reduce_max(logits, 1, keep_dims=True)
-                    #tf.summary.histogram('Output_logits', self.logits)
-                    #tf.summary.tensor_summary('Output_logits', self.logits)
                     # Find the class index for each data point (the class with maximum F score)
                     outclassidx = tf.argmax(logits, 1)
                 
                 with tf.name_scope('ZSL/Calculate_Softmax_'+str(GraphID)):
                     denom = tf.reduce_sum(tf.exp(tf.subtract(logits, maxlogits)), 1)        
-                    #denom = tf.reduce_sum(tf.exp(logits), 1)
                     M = tf.subtract(tf.reduce_sum(Matmul * self.CE[GraphID], 1), tf.squeeze(maxlogits))
-                    #M = tf.reduce_sum(Matmul * self.CE[GraphID], 1)
                     rightprobs = tf.exp(M) / (denom + 1e-15) # Softmax
-                    #self.rightprobs = tf.clip_by_value(self.rightprobs, clip_value_min= 1e-15, clip_value_max = 1 - 1e-15)
                     tf.summary.histogram('RightProbs', rightprobs)
-                    #tf.summary.tensor_summary('RightProbs', rightprobs)
-                
-                #with tf.name_scope('ZSL/Accuracy'):
-                    #self.accuracy, _ = tf.metrics.accuracy(predictions= self.outclassidx, labels = self.TCI)
-                    #tf.summary.scalar('accuracy', self.accuracy)
                 with tf.name_scope('ZSL/Loss_CrossEntropy_' + str(GraphID)):
                     # Calculate error using cross entropy
-                    #self.cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, labels=self.TCI))
-                    #cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=self.TCI[GraphID]))
-                    #vars = tf.trainable_variables() 
                     P = tf.clip_by_value(rightprobs, clip_value_min= 1e-15, clip_value_max = 1.1)
                     cost = tf.reduce_mean(-1 * tf.log(P))
-                    #cost += tf.add_n([ tf.nn.l2_loss(v) for v in vars if 'bias' not in v.name ]) * self.Params["regs"]
                     tf.summary.scalar('loss', cost)
                 with tf.name_scope('ZSL/Optimizer_Metrics_'+str(GraphID)):
                     trainvars =  tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Graph' + str(GraphID))
@@ -402,18 +372,11 @@ class EndToEndModel:
                 merged = tf.summary.merge_all()
                 
                 self.train_writer['Graph_' + str(GraphID)] = tf.summary.FileWriter(os.path.join(self.LogDir,'Ensemble','logdir','Graph_' + str(GraphID), 'train'), optimizer.graph)
-                self.test_writer['Graph_' + str(GraphID)] = tf.summary.FileWriter(os.path.join(self.LogDir,'Ensemble','logdir','Graph_' + str(GraphID), 'test'), optimizer.graph)
                 self.val_writer['Graph_' + str(GraphID)] = tf.summary.FileWriter(os.path.join(self.LogDir,'Ensemble','logdir','Graph_' + str(GraphID), 'val'), optimizer.graph)
-                
-                
-                #self.session_conf = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
             
             return {"optimizer": optimizer, "cost": cost, "outclassidx": outclassidx, "merged": merged, "W": W, "logits": logits, "rightprobs":rightprobs, "globalstep": global_step, "denom":denom, "M":M, "maxlogits":maxlogits, "logits":logits}
     def step(self, batch_X, batch_CE, batch_TCI, TrainCandidateKinases, Model, Modelind):
         seq_len = [self.seq_lens] * len(batch_X)
-        #run_options = tf.RunOptions(trace_level=tf.RunOptions.NO_TRACE)
-        #self.run_metadata = tf.RunMetadata()
-        #seq_len = np.array([list(x).index(-1) + 1 for x in batch_X])  # actual lengths of sequences
         input_feed = {self.batch_ph[Modelind]: batch_X,
                       self.CE[Modelind]: batch_CE,
                       self.CKE[Modelind]: TrainCandidateKinases,
@@ -421,29 +384,11 @@ class EndToEndModel:
                       self.seq_len_ph[Modelind]: seq_len,
                       self.keep_prob_ph[Modelind]: 1-self.Params["dropoutval"],
                       self.is_training[Modelind]: True}
-        #Checking M and denom:
-        #output_feed1 = [Model["M"], Model["denom"], Model["rightprobs"], Model["maxlogits"], Model["logits"]]        
-        #outputs = self.sess[Modelind].run(output_feed1, input_feed)#, run_metadata=self.run_metadata, options=run_options)
-        #print("\n\n========M : =======")
-        #print(outputs[0])
-        #print("\n\n========denom : =======")
-        #print(outputs[1])
-        #print("\n\n========rightprobs : =======")
-        #print(outputs[2])
-        #print("\n\n========maxlogits : ========")
-        #print(outputs[3])
-        #print("\n\n========logits : ========")
-        #print(outputs[4])
         
         output_feed = [Model["optimizer"], Model["cost"], Model["outclassidx"], Model["merged"]]        
-        outputs = self.sess[Modelind].run(output_feed, input_feed)#, run_metadata=self.run_metadata, options=run_options)
+        outputs = self.sess[Modelind].run(output_feed, input_feed)
         return outputs
-#    def next_batch(self, batch_size, DE, CE, TCI, index):
-#        batch_DE = DE[index * batch_size:(index+1) * batch_size]
-#        batch_CE = CE[index * batch_size:(index+1) * batch_size]
-#        batch_TCI = TCI[index * batch_size:(index+1) * batch_size]
-#        return batch_DE, batch_CE, batch_TCI
-#        
+    
     def next_batch(self, batch_size, DE, CE, TCI, modelindx, shuffle=True, FakeRand = False):
         """Taken From TensorFlow https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/learn/python/learn/datasets/mnist.py"""
         """Return the next `batch_size` examples from this data set."""
@@ -493,8 +438,7 @@ class EndToEndModel:
           return self.DE_Shuffled[start:end], self.CE_Shuffled[start:end], self.TCI_Shuffled[start:end]
       
     def train(self, X, ClassEmbedding, TrainCandidateKinases, TrueClassIDX, epochcount, 
-              ValDE = None, ValCandidatekinaseEmbeddings=None, ValCandidateKE_to_Kinase=None, ValKinaseUniProtIDs=None, ValKinaseEmbeddings=None, ValisMultiLabel=True, Val_TrueClassIDX=None, ValCandidateUniProtIDs=None,
-              TestDE=None, TestCandidatekinaseEmbeddings=None, CandidateKE_to_Kinase=None, TestKinaseUniProtIDs=None, TestKinaseEmbeddings=None, TestisMultiLabel=True, Test_TrueClassIDX=None, TestCandidateUniProtIDs=None):
+              ValDE = None, ValCandidatekinaseEmbeddings=None, ValCandidateKE_to_Kinase=None, ValKinaseUniProtIDs=None, ValKinaseEmbeddings=None, ValisMultiLabel=True, Val_TrueClassIDX=None, ValCandidateUniProtIDs=None):
         """
         train the BiRNN model
         Args:
@@ -505,28 +449,20 @@ class EndToEndModel:
             Y_test = One-hot encoded labels of validation kinases
             Kinases = list of kinase class types for provided Y for training this is only for visualizing TSNE embeddings
         """
-        print("Number of Train data: {} Number of Test data: {} Number of Val data: {}".format(len(X), len(TestDE), len(ValDE)))
+        print("Number of Train data: {} Number of Val data: {}".format(len(X), len(ValDE)))
         # Add one to the DataEmbeddings and ClassEmbeddings
-        #DataEmbedding_with1 = np.c_[ DataEmbedding, np.ones(len(DataEmbedding)) ]
         ClassEmbedding_with1 = np.c_[ ClassEmbedding, np.ones(len(ClassEmbedding)) ]
         TrainCandidateKinases_with1 = np.c_[ TrainCandidateKinases, np.ones(len(TrainCandidateKinases)) ]
         # Find the indices of the true classes in the candidate class embeddings
-        #TrueClassIDX = self.FindTrueClassIndices(ClassEmbedding_with1, TrainCandidateKinases_with1)
-        #Test_TrueClassIDX = self.FindTrueClassIndices(TestKinaseEmbeddings, TestCandidatekinaseEmbeddings, TestisMultiLabel)
-        #Val_TrueClassIDX = self.FindTrueClassIndices(ValKinaseEmbeddings, ValCandidatekinaseEmbeddings, ValisMultiLabel)
         self.training_epochs = epochcount
         
         self.num_examples = len(X)
         
-        if TestKinaseUniProtIDs is not None:
-            mlb_test = MultiLabelBinarizer()
-            binlabels_true_test = mlb_test.fit_transform(TestKinaseUniProtIDs)
         if ValKinaseUniProtIDs is not None:
             mlb_Val = MultiLabelBinarizer()
             binlabels_true_Val = mlb_Val.fit_transform(ValKinaseUniProtIDs)
         
         Bestaccuracy_Val = 0
-        Bestaccuracy_Test = 0
         Bestaccuracy_Train = 0
         Best_loss = 0
         
@@ -534,18 +470,13 @@ class EndToEndModel:
         AllAccuracyTrains = np.zeros(self.Params["NumofModels"])
         AllAccuracyLoss = np.zeros(self.Params["NumofModels"])
         AllAccuracyVals = np.zeros(self.Params["NumofModels"])
-        AllAccuracyTests = np.zeros(self.Params["NumofModels"])
         print("Epoch,," + ','.join(['TrainAcc_{}'.format(i) for i in range(self.Params["NumofModels"])]) + ',,' + ','.join(['ValAcc_{}'.format(i) for i in range(self.Params["NumofModels"])])+ ',,' + ','.join(['TestAcc_{}'.format(i) for i in range(self.Params["NumofModels"])]) + ',,' + 'ValAcc_Ensemble,TestAcc_Ensemble', file=Allresults)
         for epoch in range(self.training_epochs):
-            #accuracy_train_avg_all = 0.0
-            #loss_train_avg_all = 0.0
             print("===================================\nepoch: {}\t".format(self._epochs_completed))
             # Training
             num_batches = int(self.num_examples/self.Params["batch_size"]) + 1            
             start_time_allmodels = time.time()
-            TestUniProtIDs = []
             ValUniProtIDs = []
-            TestProbs = []
             ValProbs = []
             for i in range(self.Params["NumofModels"]):
                 os.environ['PYTHONHASHSEED'] = '0'
@@ -568,7 +499,7 @@ class EndToEndModel:
                     loss_train += c / num_batches
                 duration_train = time.time()-start_time_train
                 if ValDE is not None:
-                    UniProtIDs, probabilities = self.predict(ValDE, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, self.Models[i], ind=i, verbose=False)
+                    UniProtIDs, probabilities = self.predict(ValDE, ValCandidatekinaseEmbeddings, ValCandidateKE_to_Kinase, self.Models[i], ind=i)
                     UniProtIDs = UniProtIDs[0]
                     probabilities = probabilities[0]
                     ValUniProtIDs.append(UniProtIDs)
@@ -586,34 +517,15 @@ class EndToEndModel:
                     Val_summary.value.add(tag="Top10_Accuracy", simple_value=Val_Evaluation["Top10Acc"])
                     Val_summary.value.add(tag="Loss", simple_value=Val_Evaluation["Loss"])
                     self.val_writer['Graph_' + str(i)].add_summary(Val_summary, epoch)
-                if TestDE is not None:
-                    UniProtIDs, probabilities = self.predict(TestDE, TestCandidatekinaseEmbeddings, CandidateKE_to_Kinase, self.Models[i], ind=i, verbose=False)
-                    UniProtIDs = UniProtIDs[0]
-                    probabilities = probabilities[0]
-                    TestUniProtIDs.append(UniProtIDs)
-                    TestProbs.append(probabilities)
-                    Test_summary= tf.Summary()
-                    predlabels = [[label] for label in UniProtIDs]
-                    binlabels_pred = mlb_test.transform(predlabels)
-                    Test_Evaluation = GetAccuracyMultiLabel(UniProtIDs, probabilities, TestKinaseUniProtIDs, Test_TrueClassIDX)
-                    with open(os.path.join(self.LogDir,'Ensemble','Reports_' + str(i),'Test_'+str(epoch)+'.txt'), 'w+') as outfile:
-                        print(classification_report(binlabels_true_test, binlabels_pred, target_names=mlb_test.classes_)+ '\n\n\n' + 'Acccuracy_Test: {}  Loss_Test: {} Top5Accuracy: {} Top10Accuracy: {}'.format(Test_Evaluation["Accuracy"], Test_Evaluation["Loss"], Test_Evaluation["Top5Acc"], Test_Evaluation["Top10Acc"]), file=outfile)
-                    Test_summary.value.add(tag="Accuracy", simple_value=Test_Evaluation["Accuracy"])
-                    Test_summary.value.add(tag="Top5_Accuracy", simple_value=Test_Evaluation["Top5Acc"])
-                    Test_summary.value.add(tag="Top10_Accuracy", simple_value=Test_Evaluation["Top10Acc"])
-                    Test_summary.value.add(tag="Loss", simple_value=Test_Evaluation["Loss"])
-                    self.test_writer['Graph_' + str(i)].add_summary(Test_summary, epoch)
                 accuracy_train /= num_batches
                 duration_all = time.time() - start_time_all
                 print("train_loss: {:.3f}, train_acc: {:.3f}".format(loss_train, accuracy_train))
                 print("Val_loss: {:.3f}, Val_acc: {:.3f}".format(Val_Evaluation["Loss"], Val_Evaluation["Accuracy"]))
-                print("Test_loss: {:.3f}, Test_acc: {:.3f}".format(Test_Evaluation["Loss"], Val_Evaluation["Accuracy"]))
                 print("Time_train: {}, Time_all: {}".format(duration_train, duration_all))
                 
                 AllAccuracyTrains[i] = accuracy_train
                 AllAccuracyLoss[i] = loss_train
                 AllAccuracyVals[i] = Val_Evaluation["Accuracy"]
-                AllAccuracyTests[i] = Test_Evaluation["Accuracy"]
                 
                 Train_summary= tf.Summary()
                 Train_summary.value.add(tag="Accuracy", simple_value=accuracy_train)
@@ -621,29 +533,12 @@ class EndToEndModel:
                 self.train_writer['Graph_' + str(i)].add_summary(Train_summary, epoch)
                 self.train_writer['Graph_' + str(i)].add_summary(summary, epoch)
                 
-                if self.WriteEmbeddingVis:
-                    self.VisualizeEmbedding(self.saver, self.train_writer, epoch, Kinases, X[:100])
                 self.train_writer['Graph_' + str(i)].flush()
-                if TestDE is not None:
-                    self.test_writer['Graph_' + str(i)].flush()
             accuracy_train_ensemble = np.mean(AllAccuracyTrains)
             loss_train_ensemble = np.mean(AllAccuracyLoss)
-            TestUniProtIDs, Testprobabilities = ensemble(TestUniProtIDs, TestProbs, TestCandidateUniProtIDs)
-            Test_Evaluation = GetAccuracyMultiLabel(TestUniProtIDs, Testprobabilities, TestKinaseUniProtIDs, Test_TrueClassIDX)
-            Test_summary= tf.Summary()
-            Test_summary.value.add(tag="Accuracy", simple_value=Test_Evaluation["Accuracy"])
-            Test_summary.value.add(tag="Top3_Accuracy", simple_value=Test_Evaluation["Top3Acc"])
-            Test_summary.value.add(tag="Top5_Accuracy", simple_value=Test_Evaluation["Top5Acc"])
-            Test_summary.value.add(tag="Top10_Accuracy", simple_value=Test_Evaluation["Top10Acc"])
-            Test_summary.value.add(tag="Loss", simple_value=Test_Evaluation["Loss"])
-            self.test_writer['Ensemble'].add_summary(Test_summary, epoch)
             
             if not os.path.exists(os.path.join(self.LogDir,'Ensemble','Reports_Ensemble')):
                 os.makedirs(os.path.join(self.LogDir,'Ensemble','Reports_Ensemble'))
-            predlabels = [[label] for label in TestUniProtIDs]
-            binlabels_pred = mlb_test.transform(predlabels)
-            with open(os.path.join(self.LogDir,'Ensemble','Reports_Ensemble','Test_'+str(epoch)+'.txt'), 'w+') as outfile:
-                print(classification_report(binlabels_true_test, binlabels_pred, target_names=mlb_test.classes_)+ '\n\n\n' + 'Acccuracy_Test: {}  Loss_Test: {} Top5Accuracy: {} Top10Accuracy: {}'.format(Test_Evaluation["Accuracy"], Test_Evaluation["Loss"], Test_Evaluation["Top5Acc"], Test_Evaluation["Top10Acc"]), file=outfile)
                         
             ValUniProtIDs, Valprobabilities = ensemble(ValUniProtIDs, ValProbs, ValCandidateUniProtIDs)
             Val_Evaluation = GetAccuracyMultiLabel(ValUniProtIDs, Valprobabilities, ValKinaseUniProtIDs, Val_TrueClassIDX)
@@ -653,25 +548,20 @@ class EndToEndModel:
             Val_summary.value.add(tag="Top10_Accuracy", simple_value=Val_Evaluation["Top10Acc"])
             Val_summary.value.add(tag="Loss", simple_value=Val_Evaluation["Loss"])
             self.val_writer['Ensemble'].add_summary(Val_summary, epoch)
-            print("\n\n Test Ensemble Accuracy: {:3f} Val Ensemble Accuracy: {:3f}".format(Test_Evaluation["Accuracy"], Val_Evaluation["Accuracy"]))
             
-            print("{},,".format(epoch) + ','.join(['{}'.format(AllAccuracyTrains[i]) for i in range(self.Params["NumofModels"])]) + ',,' + ','.join(['{}'.format(AllAccuracyVals[i]) for i in range(self.Params["NumofModels"])])+ ',,' + ','.join(['{}'.format(AllAccuracyTests[i]) for i in range(self.Params["NumofModels"])]) + ',,' + '{},{}'.format(Val_Evaluation["Accuracy"],Test_Evaluation["Accuracy"]), file=Allresults)
             
             predlabels = [[label] for label in ValUniProtIDs]
             binlabels_pred = mlb_Val.transform(predlabels)
             with open(os.path.join(self.LogDir,'Ensemble','Reports_Ensemble','Val_'+str(epoch)+'.txt'), 'w+') as outfile:
                 print(classification_report(binlabels_true_Val, binlabels_pred, target_names=mlb_Val.classes_) + '\n\n\n' + 'Acccuracy_Val: {}  Loss_Val: {} Top5Accuracy: {} Top10Accuracy: {}'.format(Val_Evaluation["Accuracy"], Val_Evaluation["Loss"], Val_Evaluation["Top5Acc"], Val_Evaluation["Top10Acc"]), file=outfile)
             
-            self.test_writer['Ensemble'].flush()
             self.val_writer['Ensemble'].flush()
-            Allresults.flush()
             if Val_Evaluation["Accuracy"] >= Bestaccuracy_Val:
                 Bestaccuracy_Val = Val_Evaluation["Accuracy"]
-                Bestaccuracy_Test = Test_Evaluation["Accuracy"]
                 Bestaccuracy_Train = accuracy_train_ensemble
                 Best_loss = loss_train_ensemble
                 self.savemodel(Bestaccuracy_Train, Best_loss)
-            print("Best accuracy Val: {}, Best accuracy Test: {}, BestAccTrain: {}, BestLossTrain: {}".format(Bestaccuracy_Val, Bestaccuracy_Test, Bestaccuracy_Train, Best_loss))
+            print("Best accuracy Val: {}, BestAccTrain: {}, BestLossTrain: {}".format(Bestaccuracy_Val, Bestaccuracy_Train, Best_loss))
                 
             duration_allMethods = time.time() - start_time_allmodels
             print("\nTime_all_Methods: {}".format(duration_allMethods))
@@ -679,29 +569,20 @@ class EndToEndModel:
         for i in range(self.Params["NumofModels"]):
             self.train_writer['Graph_' + str(i)].flush()
             self.train_writer['Graph_' + str(i)].close()
-            if TestDE is not None:
-                self.test_writer['Graph_' + str(i)].flush()
-                self.test_writer['Graph_' + str(i)].close()
             if ValDE is not None:
                 self.val_writer['Graph_' + str(i)].flush()
                 self.val_writer['Graph_' + str(i)].close()
-        self.test_writer['Ensemble'].flush()
-        self.test_writer['Ensemble'].close()
         self.val_writer['Ensemble'].flush()
         self.val_writer['Ensemble'].close()
-        Allresults.close()
         return Bestaccuracy_Train, Best_loss
     
-    def predict(self,  DataEmbedding, TestCandidateKinases, CandidateKE_to_Kinase, Model = None, ind=None, verbose= True):
+    def predict(self,  DataEmbedding, TestCandidateKinases, CandidateKE_to_Kinase, Model = None, ind=None):
         """
         The method to predict the classes of given DataEmbeddings
         Args:
             DataEmbedding: The sequence embedding of the input kinases
             TestCandidateKinases: The list of candidate kinases
-            verbose: Should the program write the Weight matrix in a file
         """
-        # Add 1 to the end of Data embeddings and candidate kinase embeddings
-        #DataEmbedding = np.c_[ DataEmbedding, np.ones(len(DataEmbedding)) ]
         if Model is not None:
             Models = [Model]
         else:
@@ -723,11 +604,7 @@ class EndToEndModel:
                           self.keep_prob_ph[index]: 1,
                           self.is_training[index]: False}
             
-            logits, W, OC = self.sess[index].run([model["logits"], model["W"], model["outclassidx"]], feed_dict=input_feed)
-            if verbose:
-                print("Writing weight matrix W in", os.path.join('EndToEndZSLWeights','ZSL_Weights' + str(self.seed) + '.txt'))
-                np.savetxt(os.path.join('ZSLWeights','ZSL_Weights' + str(self.seed[idx]) + '.txt'), W)
-           
+            logits, W, OC = self.sess[index].run([model["logits"], model["W"], model["outclassidx"]], feed_dict=input_feed)   
             
             classes = TestCandidateKinases[OC]
             # get UniProtIDs for predicted classes and return them

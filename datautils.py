@@ -53,6 +53,7 @@ class dataset:
         
         self.Sequences= [] # The sequences of sites
         self.Sub_IDs= [] # The Uniprot IDs of Substrates
+        self.Residues = []
         self.Kinases= [] # The list of kinases it can be empty if this is a test set
         self.SeqSize = 7 # The sequence size of the phosphosite is SeqSize * 2 + 1 this paramether indicates how many of amino acids we will pick in each side of the site
     
@@ -99,6 +100,7 @@ class dataset:
                         print(row[3], " Not Found in Allkinases dataset skipping row:", row)
                         continue
                 self.Sub_IDs.append(row[0])
+                self.Residues.append(row[1])
                 Sequence = list(row[2].upper())
                 self.Sequences.append(Sequence)
                 if islabeled:
